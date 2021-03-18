@@ -7,11 +7,13 @@
 *.jpg
 *.dat
 *.pkl
+*.xlsx
 output/
 recycle_bin/
 docs/
 .ipynb_checkpoints
 .virtual_documents
+constants.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

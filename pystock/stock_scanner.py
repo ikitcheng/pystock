@@ -35,7 +35,6 @@ class Stock():
         self.ticker = ticker
         self.technical = None
         self.df = None # technical data for last 30 days (training)
-        self.df = None # technical data for last 30 days (training)
         self.y = None # buy sell labels for last 30 days (training)
         self.quote = None
         self.fundamental = None
