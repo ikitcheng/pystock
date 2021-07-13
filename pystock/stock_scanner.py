@@ -14,9 +14,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import random
-from datetime import datetime
-from datetime import timedelta
-from datetime import date
+from datetime import datetime, timedelta, date
 import re
 import os
 import pickle
@@ -272,19 +270,29 @@ class StockScanner(Stock):
         self.tickers_ftse100 = si.tickers_ftse100() 
         self.tickers_ftse250 = si.tickers_ftse250()
         self.tickers_nasdaq = si.tickers_nasdaq()
-        self.tickers_other = si.tickers_other()
         self.tickers_sp500 = si.tickers_sp500()
+        self.tickers_other = si.tickers_other()
         self.tickers_all = self.get_all_tickers()
+        self.clean_LSE_tickers()
             
         self.tickers_high_vol = []
-        self.my_stocks = {}
+        self.stock_picks = {}
         
         # Train data for all my_stocks
         self.X = None
         self.y = None
         self.label = None
-        
-        
+    
+    def clean_LSE_tickers(self):
+        """
+        Clean the ftse100 and ftse250 stock tickers by adding .L at the end. 
+        This allows getting data for these tickers from yahoo finance. 
+        """
+        self.tickers_ftse100 = [ticker.split('.')[0]+'.L' for ticker in self.tickers_ftse100]
+        self.tickers_ftse100[self.tickers_ftse100.index('BT.L')] = 'BT-A.L' # BT Group plc (BT-A.L) on yahoo finance
+
+        self.tickers_ftse250 = [ticker.split('.')[0]+'.L' for ticker in self.tickers_ftse250]
+
     def get_all_tickers(self):
         """ Get a list of all tickers in US market """
         ticker_list = self.tickers_ftse100 + \
@@ -297,9 +305,58 @@ class StockScanner(Stock):
         
         return set(ticker_list)    
 
+    def get_cheap_stocks(self, tickers, threshold=0.6, start_date='2020-02-20', end_date=None, interval='1d'):
+        """
+        Get cheap stocks since the COVID19 pandemic. Define 'cheap' as 60% of 2020-02-20 price levels. 
+
+        Args:
+            tickers (list): A list of tickers. 
+            threshold (float, optional): Threshold representing fraction of current price to 2020-02-20 price. Defaults to 0.6.
+            start_date (str, optional): Start date of data. Defaults to '2020-02-20'.
+            end_date (str, optional): End date of data. Defaults to None.
+            interval (str, optional): Data resolution. Defaults to '1d'.
+
+        Output is stored in self.stock_picks.
+        """
+        for tk in tqdm(tickers):
+            tk = tk.upper()
+            if '^' in tk: 
+                pass
+            else:
+                try:    
+                    my_stock = Stock(tk).get_technical_data(start_date, 
+                                                              end_date,
+                                                              interval)
+
+                    current_price = my_stock['adjclose'].iloc[-1]
+                    prepandemic_price = my_stock['adjclose'].iloc[0]
+                    ratio = current_price / prepandemic_price
+                                                                            
+                    # Apply Thresehold sigma from mean
+                    if ratio <= threshold: 
+                        print(f'{tk} is {ratio*100:.2f} % of prepandemic price levels.')
+                        self.stock_picks[tk] = Stock(tk)
+                        self.tickers_high_vol.append(tk)
+                except Exception as e:
+                    print(e)
+                    print(f'{tk} invalid.')
+                    pass
 
     def get_high_vol_stocks(self, tickers, threshold=3, start_date=datetime.now()-timedelta(days=30),
                            end_date=None, interval='1d'):
+        """ 
+        Get high volume stocks which have a 3 sigma spike relative to previous 30 day average volume. 
+
+        Args:
+            tickers (list): A list of tickers. 
+            threshold (int, optional): Number of sigma from mean. Defaults to 3.
+            start_date (datetime, optional): Start date of data. Defaults to datetime.now()-timedelta(days=30).
+            end_date (datetime, optional): End date of data. Defaults to None.
+            interval (str, optional): Data resolution. Defaults to '1d'.
+
+        Output is recorded in self.stock_picks
+
+        """
         # Since there are over 10k stocks. Need to define some 
         
         for tk in tqdm(tickers):
@@ -322,7 +379,7 @@ class StockScanner(Stock):
                     # Thresehold sigma from mean
                     if (todays_vol - prev_vol_avg)/prev_vol_std >= threshold: 
                        # print(tk, prev_vol_std)
-                        self.my_stocks[tk] = Stock(tk)
+                        self.stock_picks[tk] = Stock(tk)
                         self.tickers_high_vol.append(tk)
                 except Exception as e: 
                     print(e)
@@ -355,9 +412,9 @@ class StockScanner(Stock):
         
     def get_train_data_for_my_stocks(self):
         """ Get training data for each high volume stock in my_stocks """
-        for tk in tqdm(self.my_stocks.keys()):
+        for tk in tqdm(self.stock_picks.keys()):
             #print(tk)
-            s = self.my_stocks[tk]
+            s = self.stock_picks[tk]
             s.download_data()
             if s.errorCount > 0:
                 continue
@@ -371,25 +428,25 @@ class StockScanner(Stock):
     def _filter_my_stocks(self):
         """ Delete stocks without fundamental data """
         tickers_to_remove = []
-        for tk in self.my_stocks.keys():
-            if self.my_stocks[tk].errorCount > 0:
+        for tk in self.stock_picks.keys():
+            if self.stock_picks[tk].errorCount > 0:
                 tickers_to_remove.append(tk)
                 
         for tk in tickers_to_remove:
-            del self.my_stocks[tk]
+            del self.stock_picks[tk]
             
-        self.tickers_high_vol = list(self.my_stocks.keys())
+        self.tickers_high_vol = list(self.stock_picks.keys())
             
     
     def _combine_train_data(self):
-        for tk in self.my_stocks.keys():                
+        for tk in self.stock_picks.keys():                
             if self.X is None:
                 # -1 index to remove last row (no buy sell label because don't know tomorrow's price yet)
-                self.X = self.my_stocks[tk].X[:-1] 
-                self.label = self.my_stocks[tk].y[:-1]
+                self.X = self.stock_picks[tk].X[:-1] 
+                self.label = self.stock_picks[tk].y[:-1]
             else:
-                self.X = np.concatenate((self.X, self.my_stocks[tk].X[:-1]), axis=0)
-                self.label = np.concatenate((self.label, self.my_stocks[tk].y[:-1]), axis=0)
+                self.X = np.concatenate((self.X, self.stock_picks[tk].X[:-1]), axis=0)
+                self.label = np.concatenate((self.label, self.stock_picks[tk].y[:-1]), axis=0)
             
         self.y = pd.Series(self.label.flatten()).astype('category').cat.codes.values
 
