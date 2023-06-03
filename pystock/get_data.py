@@ -7,7 +7,6 @@ import datetime
 import requests
 import io
 import pandas as pd
-import constants # API keys
 
 from urllib.request import urlopen, Request
 from bs4 import BeautifulSoup
@@ -86,7 +85,7 @@ def get_historical_news(ticker, date_from, date_to, outdir, website='finnhub'):
     data = {"symbol": ticker,
             "from": date_from,
             "to": date_to,
-            "token": constants.FINNHUB_KEY} 
+            "token": os.environ.get('FINNHUB_KEY',None)} 
     
     if website == 'finnhub':
         response = requests.get('https://finnhub.io/api/v1/company-news', data)
@@ -105,7 +104,7 @@ def intraday_extended_price_data(ticker, window, interval, website='alphavantage
             "symbol": ticker,
             "interval": interval,
             "slice": window,
-            "apikey": constants.ALPHAVANTAGE_KEY
+            "apikey": os.environ.get('ALPHAVANTAGE_KEY',None)
            } 
     if website == 'alphavantage':
         response = requests.get('https://www.alphavantage.co/query', data).content
@@ -123,7 +122,7 @@ def intraday_price_data(ticker, interval, website='alphavantage'):
             "symbol": ticker,
             "interval": interval,
             "outputsize" : "full", # compact is default (latest 100 data points)
-            "apikey": constants.ALPHAVANTAGE_KEY
+            "apikey": os.environ.get('ALPHAVANTAGE_KEY',None)
            }
     if website == 'alphavantage':
         response = requests.get('https://www.alphavantage.co/query', data).json()

@@ -14,6 +14,7 @@ docs/
 .ipynb_checkpoints
 .virtual_documents
 constants.py
+.env
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
