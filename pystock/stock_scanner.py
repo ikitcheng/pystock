@@ -289,8 +289,10 @@ class StockScanner(Stock):
         This allows getting data for these tickers from yahoo finance. 
         """
         self.tickers_ftse100 = [ticker.split('.')[0]+'.L' for ticker in self.tickers_ftse100]
-        self.tickers_ftse100[self.tickers_ftse100.index('BT.L')] = 'BT-A.L' # BT Group plc (BT-A.L) on yahoo finance
-
+        try:
+            self.tickers_ftse100[self.tickers_ftse100.index('BT.L')] = 'BT-A.L' # BT Group plc (BT-A.L) on yahoo finance
+        except: 
+            print("Ticker not found: BT.L")
         self.tickers_ftse250 = [ticker.split('.')[0]+'.L' for ticker in self.tickers_ftse250]
 
     def get_all_tickers(self):
